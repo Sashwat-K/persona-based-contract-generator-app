@@ -133,12 +133,21 @@ Automatically builds web assets, then generates:
 npm run package:linux
 ```
 Automatically builds web assets, then generates:
-- Unpacked binary directory (x64) in `dist-electron/linux-unpacked/`
+- AppImage (x64) - Universal Linux package
+- DEB package (x64) - Debian/Ubuntu
+- RPM package (x64) - Red Hat/Fedora/CentOS
 
-**Running the Linux Binary:**
+**Installing Linux Packages:**
 ```bash
-cd dist-electron/linux-unpacked
-./ccrt-contract-builder
+# AppImage (recommended - no installation needed)
+chmod +x dist-electron/IBM-CC-Contract-Builder-*.AppImage
+./dist-electron/IBM-CC-Contract-Builder-*.AppImage
+
+# DEB package
+sudo dpkg -i dist-electron/IBM-CC-Contract-Builder-*.deb
+
+# RPM package
+sudo rpm -i dist-electron/IBM-CC-Contract-Builder-*.rpm
 ```
 
 Built applications are output to the `dist-electron/` directory.

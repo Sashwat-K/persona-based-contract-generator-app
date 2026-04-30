@@ -127,7 +127,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-builds
-          path: dist-electron/linux-unpacked/**/*
+          path: |
+            dist-electron/*.AppImage
+            dist-electron/*.deb
+            dist-electron/*.rpm
           retention-days: 7
       
       - name: Upload Windows artifacts
@@ -166,7 +169,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: linux-builds
-          path: release-artifacts/linux-unpacked
+          path: release-artifacts/linux
       
       - name: Download Windows artifacts
         uses: actions/download-artifact@v4
@@ -180,16 +183,10 @@ jobs:
           name: macos-builds
           path: release-artifacts/macos
       
-      - name: Create Linux archive
-        run: |
-          cd release-artifacts
-          tar -czf linux-builds.tar.gz linux-unpacked/
-          rm -rf linux-unpacked
-      
       - name: Generate checksums
         run: |
           cd release-artifacts
-          find . -type f \( -name "*.tar.gz" -o -name "*.exe" -o -name "*.dmg" -o -name "*.zip" \) -exec sha256sum {} \; > SHA256SUMS.txt
+          find . -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.exe" -o -name "*.dmg" -o -name "*.zip" \) -exec sha256sum {} \; > SHA256SUMS.txt
           cat SHA256SUMS.txt
       
       - name: Generate release notes
@@ -200,7 +197,9 @@ jobs:
           ### Downloads
           
           #### Linux
-          - **linux-builds.tar.gz**: Unpacked binary directory
+          - **AppImage**: Universal Linux package (recommended)
+          - **DEB**: Debian/Ubuntu package
+          - **RPM**: Red Hat/Fedora/CentOS package
           
           #### Windows
           - **NSIS Installer**: Standard Windows installer
@@ -213,10 +212,21 @@ jobs:
           ### Installation
           
           **Linux:**
+          
+          AppImage:
           ```bash
-          tar -xzf linux-builds.tar.gz
-          cd linux-unpacked
-          ./ccrt-contract-builder
+          chmod +x IBM-CC-Contract-Builder-*.AppImage
+          ./IBM-CC-Contract-Builder-*.AppImage
+          ```
+          
+          DEB:
+          ```bash
+          sudo dpkg -i IBM-CC-Contract-Builder-*.deb
+          ```
+          
+          RPM:
+          ```bash
+          sudo rpm -i IBM-CC-Contract-Builder-*.rpm
           ```
           
           **Windows:**

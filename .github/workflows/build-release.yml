@@ -75,7 +75,9 @@ jobs:
         with:
           name: linux-builds
           path: |
-            dist-electron/linux-unpacked/**/*
+            dist-electron/*.AppImage
+            dist-electron/*.deb
+            dist-electron/*.rpm
           retention-days: 7
           if-no-files-found: error
       
@@ -160,7 +162,9 @@ jobs:
           ### Downloads
           
           #### Linux
-          - **Binary Directory**: Unpacked Linux application directory with executable
+          - **AppImage**: Universal Linux package (recommended)
+          - **DEB**: Debian/Ubuntu package
+          - **RPM**: Red Hat/Fedora/CentOS package
           
           #### Windows
           - **NSIS Installer**: Standard Windows installer with uninstaller
@@ -174,14 +178,23 @@ jobs:
           
           #### Linux
           
-          **Binary Directory:**
+          **AppImage:**
           ```bash
-          # Extract the archive
-          tar -xzf linux-builds.tar.gz
-          cd linux-unpacked
+          chmod +x IBM-CC-Contract-Builder-*.AppImage
+          ./IBM-CC-Contract-Builder-*.AppImage
+          ```
           
-          # Run the application
-          ./ibm-cc-contract-builder
+          **DEB (Debian/Ubuntu):**
+          ```bash
+          sudo dpkg -i IBM-CC-Contract-Builder-*.deb
+          sudo apt-get install -f  # Install dependencies if needed
+          ```
+          
+          **RPM (Red Hat/Fedora/CentOS):**
+          ```bash
+          sudo rpm -i IBM-CC-Contract-Builder-*.rpm
+          # or
+          sudo dnf install IBM-CC-Contract-Builder-*.rpm
           ```
           
           #### Windows
