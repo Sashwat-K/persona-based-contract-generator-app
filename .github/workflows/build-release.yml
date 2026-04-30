@@ -6,12 +6,16 @@ on:
       - 'v*'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -75,6 +79,7 @@ jobs:
             dist-electron/*.deb
             dist-electron/*.rpm
           retention-days: 7
+          if-no-files-found: error
       
       - name: Upload Windows artifacts
         if: matrix.platform == 'windows'
@@ -84,6 +89,7 @@ jobs:
           path: |
             dist-electron/*.exe
           retention-days: 7
+          if-no-files-found: error
       
       - name: Upload macOS artifacts
         if: matrix.platform == 'macos'
@@ -94,6 +100,7 @@ jobs:
             dist-electron/*.dmg
             dist-electron/*.zip
           retention-days: 7
+          if-no-files-found: error
 
   release:
     name: Create Release
@@ -107,6 +114,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
       - name: Download Linux artifacts
         uses: actions/download-artifact@v4
@@ -129,11 +138,20 @@ jobs:
       - name: List all artifacts
         run: |
           echo "All release artifacts:"
-          find release-artifacts -type f
+          find release-artifacts -type f -exec ls -lh {} \;
       
       - name: Extract version from tag
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Release version: ${VERSION}"
+      
+      - name: Generate checksums
+        run: |
+          cd release-artifacts
+          find . -type f \( -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.exe" -o -name "*.dmg" -o -name "*.zip" \) -exec sha256sum {} \; > SHA256SUMS.txt
+          cat SHA256SUMS.txt
       
       - name: Generate release notes
         id: release_notes
@@ -144,54 +162,97 @@ jobs:
           ### Downloads
           
           #### Linux
-          - AppImage: Universal Linux package
-          - DEB: Debian/Ubuntu package
-          - RPM: Red Hat/Fedora package
+          - **AppImage**: Universal Linux package (recommended)
+          - **DEB**: Debian/Ubuntu package
+          - **RPM**: Red Hat/Fedora/CentOS package
           
           #### Windows
-          - NSIS Installer: Standard Windows installer
-          - Portable: No installation required
+          - **NSIS Installer**: Standard Windows installer with uninstaller
+          - **Portable**: Standalone executable (no installation required)
           
           #### macOS
-          - DMG: macOS disk image (Intel and Apple Silicon)
-          - ZIP: Compressed application bundle
+          - **DMG**: macOS disk image for Intel and Apple Silicon
+          - **ZIP**: Compressed application bundle
           
           ### Installation Instructions
           
-          **Linux:**
+          #### Linux
+          
+          **AppImage (Recommended):**
           ```bash
-          # AppImage
           chmod +x IBM-CC-Contract-Builder-*.AppImage
           ./IBM-CC-Contract-Builder-*.AppImage
-          
-          # DEB
-          sudo dpkg -i IBM-CC-Contract-Builder-*.deb
-          
-          # RPM
-          sudo rpm -i IBM-CC-Contract-Builder-*.rpm
           ```
           
-          **Windows:**
-          - Run the installer executable
-          - Or extract and run the portable version
+          **Debian/Ubuntu (.deb):**
+          ```bash
+          sudo dpkg -i IBM-CC-Contract-Builder-*.deb
+          sudo apt-get install -f  # Install dependencies if needed
+          ```
           
-          **macOS:**
-          - Open the DMG file and drag to Applications
-          - Or extract the ZIP file
+          **Red Hat/Fedora/CentOS (.rpm):**
+          ```bash
+          sudo rpm -i IBM-CC-Contract-Builder-*.rpm
+          # or
+          sudo dnf install IBM-CC-Contract-Builder-*.rpm
+          ```
+          
+          #### Windows
+          
+          **Installer:**
+          1. Download and run the `.exe` installer
+          2. Follow the installation wizard
+          3. Launch from Start Menu or Desktop shortcut
+          
+          **Portable:**
+          1. Download the portable `.exe`
+          2. Run directly without installation
+          
+          #### macOS
+          
+          **DMG:**
+          1. Download and open the `.dmg` file
+          2. Drag the application to the Applications folder
+          3. Launch from Applications or Launchpad
+          
+          **ZIP:**
+          1. Download and extract the `.zip` file
+          2. Move the application to Applications folder
+          3. Right-click and select "Open" on first launch (Gatekeeper)
           
           ### System Requirements
-          - Node.js >= 25.9.0 (for development)
-          - Operating System: Linux, Windows 10+, or macOS 10.15+
+          
+          - **Linux**: Ubuntu 18.04+, Debian 10+, Fedora 32+, or equivalent
+          - **Windows**: Windows 10 (64-bit) or later
+          - **macOS**: macOS 10.15 (Catalina) or later
+          - **Memory**: 4 GB RAM minimum, 8 GB recommended
+          - **Disk Space**: 500 MB free space
+          
+          ### Verification
+          
+          Verify the integrity of downloaded files using SHA256 checksums:
+          ```bash
+          sha256sum -c SHA256SUMS.txt
+          ```
           
           ### What's New
-          See CHANGELOG.md for detailed changes.
+          
+          See [CHANGELOG.md](CHANGELOG.md) for detailed changes in this release.
+          
+          ### Support
+          
+          - **Issues**: Report bugs or request features on [GitHub Issues](https://github.com/${{ github.repository }}/issues)
+          - **Documentation**: See [README.md](README.md) for usage instructions
+          
+          ---
+          
+          **Note**: This is an open-source project. Contributions are welcome!
           EOF
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
-          cat release_notes.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          
+          echo "Release notes generated successfully"
       
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ steps.version.outputs.VERSION }}
           body_path: release_notes.md
@@ -201,5 +262,8 @@ jobs:
             release-artifacts/linux/*
             release-artifacts/windows/*
             release-artifacts/macos/*
+            release-artifacts/SHA256SUMS.txt
+          fail_on_unmatched_files: true
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
