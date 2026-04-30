@@ -7,10 +7,12 @@
     "start": "vite",
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
     "build": "vite build",
-    "package": "electron-builder --config electron-builder.json",
-    "package:mac": "electron-builder --config electron-builder.json --mac",
-    "package:win": "electron-builder --config electron-builder.json --win",
-    "package:linux": "electron-builder --config electron-builder.json --linux"
+    "prebuild": "npm run clean",
+    "clean": "rm -rf dist dist-electron",
+    "package": "npm run build && electron-builder --config electron-builder.json",
+    "package:mac": "npm run build && electron-builder --config electron-builder.json --mac",
+    "package:win": "npm run build && electron-builder --config electron-builder.json --win",
+    "package:linux": "npm run build && electron-builder --config electron-builder.json --linux"
   },
   "keywords": [
     "ccrt",
@@ -18,8 +20,16 @@
     "contract-builder"
   ],
   "author": {
-    "name": "Sashwat K",
-    "email": "sashwat.k@ibm.com"
+    "name": "IBM",
+    "email": "support@ibm.com"
+  },
+  "homepage": "https://github.com/Sashwat-K/persona-based-contract-generator-app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sashwat-K/persona-based-contract-generator-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Sashwat-K/persona-based-contract-generator-app/issues"
   },
   "license": "Apache-2.0",
   "engines": {

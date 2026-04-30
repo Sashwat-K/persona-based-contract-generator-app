@@ -75,9 +75,7 @@ jobs:
         with:
           name: linux-builds
           path: |
-            dist-electron/*.AppImage
-            dist-electron/*.deb
-            dist-electron/*.rpm
+            dist-electron/linux-unpacked/**/*
           retention-days: 7
           if-no-files-found: error
       
@@ -162,9 +160,7 @@ jobs:
           ### Downloads
           
           #### Linux
-          - **AppImage**: Universal Linux package (recommended)
-          - **DEB**: Debian/Ubuntu package
-          - **RPM**: Red Hat/Fedora/CentOS package
+          - **Binary Directory**: Unpacked Linux application directory with executable
           
           #### Windows
           - **NSIS Installer**: Standard Windows installer with uninstaller
@@ -178,23 +174,14 @@ jobs:
           
           #### Linux
           
-          **AppImage (Recommended):**
+          **Binary Directory:**
           ```bash
-          chmod +x IBM-CC-Contract-Builder-*.AppImage
-          ./IBM-CC-Contract-Builder-*.AppImage
-          ```
+          # Extract the archive
+          tar -xzf linux-builds.tar.gz
+          cd linux-unpacked
           
-          **Debian/Ubuntu (.deb):**
-          ```bash
-          sudo dpkg -i IBM-CC-Contract-Builder-*.deb
-          sudo apt-get install -f  # Install dependencies if needed
-          ```
-          
-          **Red Hat/Fedora/CentOS (.rpm):**
-          ```bash
-          sudo rpm -i IBM-CC-Contract-Builder-*.rpm
-          # or
-          sudo dnf install IBM-CC-Contract-Builder-*.rpm
+          # Run the application
+          ./ibm-cc-contract-builder
           ```
           
           #### Windows
@@ -230,10 +217,7 @@ jobs:
           
           ### Verification
           
-          Verify the integrity of downloaded files using SHA256 checksums:
-          ```bash
-          sha256sum -c SHA256SUMS.txt
-          ```
+          Verify the integrity of downloaded files using SHA256 checksums (if provided).
           
           ### What's New
           

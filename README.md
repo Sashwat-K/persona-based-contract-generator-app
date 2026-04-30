@@ -96,6 +96,8 @@ npm run build
 
 This creates optimized production files in the `dist/` directory.
 
+**Note**: The packaging commands automatically run `npm run build` first, so you don't need to build manually before packaging.
+
 ### Package Application
 
 #### All Platforms
@@ -103,13 +105,18 @@ This creates optimized production files in the `dist/` directory.
 npm run package
 ```
 
+This command will:
+1. Clean previous builds
+2. Build web assets with Vite
+3. Package the Electron application
+
 #### Platform-Specific Builds
 
 **macOS**
 ```bash
 npm run package:mac
 ```
-Generates:
+Automatically builds web assets, then generates:
 - DMG installer (x64 and arm64)
 - ZIP archive (x64 and arm64)
 
@@ -117,7 +124,7 @@ Generates:
 ```bash
 npm run package:win
 ```
-Generates:
+Automatically builds web assets, then generates:
 - NSIS installer (x64 and ia32)
 - Portable executable (x64)
 
@@ -125,10 +132,14 @@ Generates:
 ```bash
 npm run package:linux
 ```
-Generates:
-- AppImage (x64)
-- DEB package (x64)
-- RPM package (x64)
+Automatically builds web assets, then generates:
+- Unpacked binary directory (x64) in `dist-electron/linux-unpacked/`
+
+**Running the Linux Binary:**
+```bash
+cd dist-electron/linux-unpacked
+./ccrt-contract-builder
+```
 
 Built applications are output to the `dist-electron/` directory.
 
@@ -285,6 +296,52 @@ Configuration is defined in `vite.config.js`:
 - Keep components focused and single-purpose
 - Use Carbon components for consistency
 - Implement proper accessibility features
+
+## Performance Optimization
+
+### Build Performance
+The application is configured for optimal build performance:
+
+**Compression Settings:**
+- Uses `normal` compression instead of `maximum` for faster builds
+- ASAR packaging enabled for better startup performance
+- Parallel builds supported
+
+**Vite Optimizations:**
+- Code splitting with manual chunks for vendor libraries
+- ESBuild minification for faster builds
+- Pre-bundled dependencies for faster dev server startup
+- Sourcemaps disabled in production builds
+
+**Tips for Faster Builds:**
+```bash
+# Use platform-specific builds instead of building all platforms
+npm run package:linux   # Only Linux
+npm run package:win     # Only Windows
+npm run package:mac     # Only macOS
+
+# For development, use the dev server (much faster)
+npm run dev
+```
+
+### Application Startup Performance
+To improve application startup time:
+
+1. **First Launch**: Initial startup may be slower due to:
+   - OS security checks (especially on macOS)
+   - First-time cache generation
+   - Dependency initialization
+
+2. **Subsequent Launches**: Should be significantly faster due to:
+   - Cached resources
+   - Pre-compiled code
+   - OS trust establishment
+
+3. **Optimization Tips:**
+   - Close unnecessary background applications
+   - Ensure sufficient RAM (8GB recommended)
+   - Use SSD storage for better I/O performance
+   - Keep the application updated
 
 ## Troubleshooting
 

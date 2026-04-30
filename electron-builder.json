@@ -3,9 +3,12 @@
   "productName": "IBM CC Contract Builder",
   "copyright": "Copyright © 2024 IBM Corporation",
   "asar": true,
-  "compression": "maximum",
+  "compression": "normal",
   "buildDependenciesFromSource": false,
   "npmRebuild": false,
+  "asarUnpack": [
+    "node_modules/sharp/**/*"
+  ],
   "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
   "directories": {
     "output": "dist-electron",
@@ -39,10 +42,6 @@
   },
   "win": {
     "target": [
-      {
-        "target": "nsis",
-        "arch": ["x64", "ia32"]
-      },
       {
         "target": "portable",
         "arch": ["x64"]
