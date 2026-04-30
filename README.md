@@ -377,9 +377,34 @@ Runs on every push and pull request:
 ### Release Workflow
 Triggered on version tags (v*):
 - Builds for Linux, Windows, and macOS
-- Creates platform-specific installers
+- Creates platform-specific binaries
 - Uploads artifacts to GitHub Releases
-- Generates release notes
+- Generates release notes with checksums
+
+**Creating a Release:**
+
+1. Update version in `package.json`:
+```bash
+npm version patch  # for 1.0.0 -> 1.0.1
+# or
+npm version minor  # for 1.0.0 -> 1.1.0
+# or
+npm version major  # for 1.0.0 -> 2.0.0
+```
+
+2. Push the tag to GitHub:
+```bash
+git push origin main --tags
+```
+
+3. GitHub Actions will automatically:
+   - Build binaries for all platforms
+   - Generate SHA256 checksums
+   - Create a GitHub Release
+   - Upload all artifacts
+
+**Manual Release Trigger:**
+You can also manually trigger the release workflow from the GitHub Actions tab.
 
 See `.github/workflows/` for workflow configurations.
 
