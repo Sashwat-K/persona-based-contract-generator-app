@@ -1,6 +1,6 @@
 {
   "name": "ccrt-contract-builder",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "IBM CC Contract Builder - Secure collaborative contract construction",
   "main": "main/index.js",
   "scripts": {
