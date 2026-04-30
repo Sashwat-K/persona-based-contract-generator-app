@@ -17,7 +17,10 @@
     "confidential-computing",
     "contract-builder"
   ],
-  "author": "IBM",
+  "author": {
+    "name": "Sashwat K",
+    "email": "sashwat.k@ibm.com"
+  },
   "license": "Apache-2.0",
   "engines": {
     "node": ">=25.9.0",
