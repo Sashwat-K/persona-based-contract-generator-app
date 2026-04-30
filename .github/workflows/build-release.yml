@@ -1,0 +1,205 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - os: windows-latest
+            platform: windows
+            arch: x64
+          - os: macos-latest
+            platform: macos
+            arch: universal
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '25.9.0'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build web assets
+        run: npm run build
+      
+      - name: Build Electron app for Linux
+        if: matrix.platform == 'linux'
+        run: npm run package:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build Electron app for Windows
+        if: matrix.platform == 'windows'
+        run: npm run package:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build Electron app for macOS
+        if: matrix.platform == 'macos'
+        run: npm run package:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+      
+      - name: List build artifacts
+        shell: bash
+        run: |
+          echo "Contents of dist-electron directory:"
+          ls -la dist-electron/ || echo "No dist-electron directory found"
+      
+      - name: Upload Linux artifacts
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-builds
+          path: |
+            dist-electron/*.AppImage
+            dist-electron/*.deb
+            dist-electron/*.rpm
+          retention-days: 7
+      
+      - name: Upload Windows artifacts
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds
+          path: |
+            dist-electron/*.exe
+          retention-days: 7
+      
+      - name: Upload macOS artifacts
+        if: matrix.platform == 'macos'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-builds
+          path: |
+            dist-electron/*.dmg
+            dist-electron/*.zip
+          retention-days: 7
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-builds
+          path: release-artifacts/linux
+      
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-builds
+          path: release-artifacts/windows
+      
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-builds
+          path: release-artifacts/macos
+      
+      - name: List all artifacts
+        run: |
+          echo "All release artifacts:"
+          find release-artifacts -type f
+      
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          cat > release_notes.md << 'EOF'
+          ## IBM CC Contract Builder ${{ steps.version.outputs.VERSION }}
+          
+          ### Downloads
+          
+          #### Linux
+          - AppImage: Universal Linux package
+          - DEB: Debian/Ubuntu package
+          - RPM: Red Hat/Fedora package
+          
+          #### Windows
+          - NSIS Installer: Standard Windows installer
+          - Portable: No installation required
+          
+          #### macOS
+          - DMG: macOS disk image (Intel and Apple Silicon)
+          - ZIP: Compressed application bundle
+          
+          ### Installation Instructions
+          
+          **Linux:**
+          ```bash
+          # AppImage
+          chmod +x IBM-CC-Contract-Builder-*.AppImage
+          ./IBM-CC-Contract-Builder-*.AppImage
+          
+          # DEB
+          sudo dpkg -i IBM-CC-Contract-Builder-*.deb
+          
+          # RPM
+          sudo rpm -i IBM-CC-Contract-Builder-*.rpm
+          ```
+          
+          **Windows:**
+          - Run the installer executable
+          - Or extract and run the portable version
+          
+          **macOS:**
+          - Open the DMG file and drag to Applications
+          - Or extract the ZIP file
+          
+          ### System Requirements
+          - Node.js >= 25.9.0 (for development)
+          - Operating System: Linux, Windows 10+, or macOS 10.15+
+          
+          ### What's New
+          See CHANGELOG.md for detailed changes.
+          EOF
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          cat release_notes.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ steps.version.outputs.VERSION }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            release-artifacts/linux/*
+            release-artifacts/windows/*
+            release-artifacts/macos/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
