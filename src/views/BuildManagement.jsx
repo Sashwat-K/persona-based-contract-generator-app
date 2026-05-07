@@ -176,7 +176,8 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
   }, []);
 
   const mapBuildRows = useCallback((list) => list.map((b) => ({
-    id: b.id,
+    id: String(b.id),
+    buildId: b.id,
     name: b.name,
     status: (() => {
       const statusMeta = getBuildStatusMeta(b);
@@ -296,15 +297,19 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
     return count;
   }, [selectedStatuses, selectedCreator, customDateRange]);
   
+  const getSelectedBuilds = useCallback((buildIds = selectedBuildIds) => (
+    builds.filter((build) => buildIds.includes(build.id))
+  ), [builds, selectedBuildIds]);
+
   // Bulk action handlers
-  const handleBulkExport = useCallback(async () => {
-    if (selectedBuildIds.length === 0) return;
+  const handleBulkExport = useCallback(async (buildIds = selectedBuildIds) => {
+    if (buildIds.length === 0) return;
     
     try {
       setBulkExportInProgress(true);
       
       // Get selected builds data
-      const selectedBuilds = builds.filter(b => selectedBuildIds.includes(b.id));
+      const selectedBuilds = getSelectedBuilds(buildIds);
       
       // Export as CSV
       const headers = ['Build Name', 'Status', 'Created By', 'Created At'];
@@ -331,7 +336,7 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
       setNotification({
         kind: 'success',
         title: 'Export Successful',
-        subtitle: `Exported ${selectedBuildIds.length} build(s) to CSV`
+        subtitle: `Exported ${buildIds.length} build(s) to CSV`
       });
       
       // Clear selection
@@ -346,16 +351,16 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
     } finally {
       setBulkExportInProgress(false);
     }
-  }, [selectedBuildIds, builds]);
+  }, [getSelectedBuilds, selectedBuildIds]);
   
-  const handleBulkDelete = useCallback(async () => {
-    if (selectedBuildIds.length === 0) return;
+  const handleBulkDelete = useCallback(async (buildIds = selectedBuildIds) => {
+    if (buildIds.length === 0) return;
     
     try {
       setBulkActionInProgress(true);
       
       // Delete builds one by one
-      const deletePromises = selectedBuildIds.map(buildId =>
+      const deletePromises = buildIds.map(buildId =>
         buildService.cancelBuild(buildId)
       );
       
@@ -364,7 +369,7 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
       setNotification({
         kind: 'success',
         title: 'Builds Cancelled',
-        subtitle: `Successfully cancelled ${selectedBuildIds.length} build(s)`
+        subtitle: `Successfully cancelled ${buildIds.length} build(s)`
       });
       
       // Clear selection and refresh
@@ -387,13 +392,13 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
     }
   }, [selectedBuildIds, onBuildCreated]);
   
-  const getSelectedBuildsInfo = useCallback(() => {
-    const selectedBuilds = builds.filter(b => selectedBuildIds.includes(b.id));
+  const getSelectedBuildsInfo = useCallback((buildIds = selectedBuildIds) => {
+    const selectedBuilds = getSelectedBuilds(buildIds);
     return {
       count: selectedBuilds.length,
       names: selectedBuilds.map(b => b.name).join(', ')
     };
-  }, [selectedBuildIds, builds]);
+  }, [getSelectedBuilds, selectedBuildIds]);
 
   // Clear all filters
   const clearAllFilters = useCallback(() => {
@@ -761,10 +766,6 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
               headers={TABLE_HEADERS}
               isSortable
               radio={false}
-              selectedRows={selectedBuildIds}
-              onSelectionChange={(selectedRows) => {
-                setSelectedBuildIds(selectedRows.map(row => row.id));
-              }}
               aria-label="Active and in-progress builds table"
             >
               {({
@@ -774,10 +775,17 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
                 getHeaderProps,
                 getRowProps,
                 getSelectionProps,
-                getBatchActionProps,
-                selectedRows
+                getBatchActionProps
               }) => {
-                const batchActionProps = getBatchActionProps();
+                const visibleBuildIds = rows.map((row) => row.buildId ?? row.id);
+                const selectedVisibleBuildIds = visibleBuildIds.filter((buildId) => selectedBuildIds.includes(buildId));
+                const selectedBuildsInfo = getSelectedBuildsInfo(selectedVisibleBuildIds);
+                const batchActionProps = getBatchActionProps({
+                  totalSelected: selectedVisibleBuildIds.length,
+                  shouldShowBatchActions: selectedVisibleBuildIds.length > 0,
+                  onCancel: () => setSelectedBuildIds([])
+                });
+                const allVisibleRowsSelected = rows.length > 0 && selectedVisibleBuildIds.length === rows.length;
                 
                 return (
                   <TableContainer
@@ -793,7 +801,7 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
                         <TableBatchAction
                           renderIcon={Export}
                           iconDescription="Export selected builds"
-                          onClick={handleBulkExport}
+                          onClick={() => handleBulkExport(selectedVisibleBuildIds)}
                           disabled={bulkExportInProgress}
                           aria-label="Export selected builds to CSV"
                         >
@@ -803,7 +811,10 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
                           <TableBatchAction
                             renderIcon={TrashCan}
                             iconDescription="Cancel selected builds"
-                            onClick={() => setBulkDeleteModalOpen(true)}
+                            onClick={() => {
+                              setSelectedBuildIds(selectedVisibleBuildIds);
+                              setBulkDeleteModalOpen(true);
+                            }}
                             disabled={bulkActionInProgress}
                             aria-label="Cancel selected builds"
                           >
@@ -940,7 +951,20 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
                     <Table {...getTableProps()}>
                       <TableHead>
                         <TableRow>
-                          <TableSelectAll {...getSelectionProps()} />
+                          <TableSelectAll
+                            {...getSelectionProps({
+                              checked: allVisibleRowsSelected,
+                              indeterminate: selectedVisibleBuildIds.length > 0 && !allVisibleRowsSelected,
+                              onSelect: () => {
+                                setSelectedBuildIds((previous) => {
+                                  if (allVisibleRowsSelected) {
+                                    return previous.filter((id) => !visibleBuildIds.includes(id));
+                                  }
+                                  return Array.from(new Set([...previous, ...visibleBuildIds]));
+                                });
+                              }
+                            })}
+                          />
                           {headers.map((header) => {
                             const { key, ...headerProps } = getHeaderProps({ header });
                             const isSortable = header.key !== 'action';
@@ -964,7 +988,20 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
                           const { key, ...rowProps } = getRowProps({ row });
                           return (
                             <TableRow key={row.id} {...rowProps}>
-                              <TableSelectRow {...getSelectionProps({ row })} />
+                              <TableSelectRow
+                                {...getSelectionProps({
+                                  row,
+                                  checked: selectedBuildIds.includes(row.buildId ?? row.id),
+                                  onSelect: () => {
+                                    const buildId = row.buildId ?? row.id;
+                                    setSelectedBuildIds((previous) => (
+                                      previous.includes(buildId)
+                                        ? previous.filter((id) => id !== buildId)
+                                        : [...previous, buildId]
+                                    ));
+                                  }
+                                })}
+                              />
                               {row.cells.map((cell) => (
                                 <TableCell key={cell.id}>{cell.value}</TableCell>
                               ))}
@@ -1285,10 +1322,10 @@ const BuildManagement = ({ builds, onSelectBuild, userRole, onBuildCreated, load
         size="sm"
       >
         <p>
-          Are you sure you want to cancel <strong>{getSelectedBuildsInfo().count}</strong> build(s)?
+          Are you sure you want to cancel <strong>{getSelectedBuildsInfo(selectedBuildIds).count}</strong> build(s)?
         </p>
         <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#525252' }}>
-          Selected builds: {getSelectedBuildsInfo().names}
+          Selected builds: {getSelectedBuildsInfo(selectedBuildIds).names}
         </p>
         <p style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#da1e28' }}>
           <strong>Warning:</strong> This action cannot be undone. Cancelled builds will be moved to the completed section.

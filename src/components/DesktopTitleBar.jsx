@@ -6,6 +6,7 @@ import { useConfigStore } from '../store/configStore';
 
 const CONNECTION_POLL_INTERVAL_MS = 15000;
 const CONNECTION_TIMEOUT_MS = 5000;
+const CONNECTION_MODAL_FAILURE_THRESHOLD = 10;
 
 const normalizeServerUrl = (value = '') => value.trim().replace(/\/+$/, '');
 const extractVersionToken = (value = '') => {
@@ -67,6 +68,7 @@ const DesktopTitleBar = ({
   const [aboutLoading, setAboutLoading] = useState(false);
   const [aboutError, setAboutError] = useState('');
   const hasSeenOnline = useRef(false);
+  const consecutiveFailureCount = useRef(0);
 
   const getServerUrl = useCallback(() => {
     const clientUrl = apiClient.getBaseURL?.() || '';
@@ -78,9 +80,16 @@ const DesktopTitleBar = ({
 
     const serverUrl = getServerUrl();
     if (!serverUrl) {
+      consecutiveFailureCount.current += 1;
       setConnectionStatus('offline');
       setConnectionError('Server URL is not configured.');
-      if (enableConnectionWatcher && (forceModal || hasSeenOnline.current)) {
+      if (
+        enableConnectionWatcher &&
+        (
+          forceModal ||
+          (hasSeenOnline.current && consecutiveFailureCount.current >= CONNECTION_MODAL_FAILURE_THRESHOLD)
+        )
+      ) {
         setShowConnectionModal(true);
       }
       return false;
@@ -115,6 +124,7 @@ const DesktopTitleBar = ({
 
       clearTimeout(timeoutId);
       hasSeenOnline.current = true;
+      consecutiveFailureCount.current = 0;
       setConnectionStatus('online');
       setPersistedConnectionStatus('connected');
       setConnectionLatencyMs(latency);
@@ -128,11 +138,18 @@ const DesktopTitleBar = ({
       const message = err.name === 'AbortError'
         ? `Connection test timed out for ${serverUrl}.`
         : `Cannot reach ${serverUrl}. ${err.message || 'Server may be unavailable.'}`;
+      consecutiveFailureCount.current += 1;
       setConnectionStatus('offline');
       setPersistedConnectionStatus('failed');
       setConnectionLatencyMs(null);
       setConnectionError(message);
-      if (enableConnectionWatcher && (forceModal || hasSeenOnline.current)) {
+      if (
+        enableConnectionWatcher &&
+        (
+          forceModal ||
+          (hasSeenOnline.current && consecutiveFailureCount.current >= CONNECTION_MODAL_FAILURE_THRESHOLD)
+        )
+      ) {
         setShowConnectionModal(true);
       }
       return false;
@@ -170,6 +187,7 @@ const DesktopTitleBar = ({
     const handleServerConnectionChanged = (event) => {
       const nextStatus = event?.detail?.connectionStatus;
       if (nextStatus === 'connected') {
+        consecutiveFailureCount.current = 0;
         setConnectionStatus('online');
         setConnectionError('');
         checkConnection({ forceModal: false });
