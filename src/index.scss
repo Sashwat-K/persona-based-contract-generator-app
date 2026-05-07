@@ -9,6 +9,7 @@
   --app-page-max-width-wide: 1600px;
   --app-page-max-width-narrow: 800px;
   --app-page-padding: 2rem;
+  --desktop-titlebar-height: 40px;
 }
 
 body {
@@ -17,6 +18,20 @@ body {
   background-color: var(--cds-background);
   color: var(--cds-text-primary);
   font-family: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.cds--modal {
+  padding-top: calc(var(--desktop-titlebar-height) + 1rem);
+  box-sizing: border-box;
+}
+
+.cds--modal-container {
+  max-height: calc(100vh - var(--desktop-titlebar-height) - 2rem);
+}
+
+.cds--modal-content,
+.cds--modal-content--overflow-indicator {
+  max-height: calc(100vh - var(--desktop-titlebar-height) - 9rem);
 }
 
 .app-page {
@@ -126,7 +141,7 @@ body {
 
 .app-shell-header {
   -webkit-app-region: drag;
-  margin-top: 40px;
+  margin-top: var(--desktop-titlebar-height);
   z-index: 9000;
 }
 
@@ -280,8 +295,8 @@ body {
 }
 
 .app-shell-sidenav {
-  height: calc(100vh - 3rem - 40px) !important;
-  top: calc(3rem + 40px) !important;
+  height: calc(100vh - 3rem - var(--desktop-titlebar-height)) !important;
+  top: calc(3rem + var(--desktop-titlebar-height)) !important;
   z-index: 8000;
 }
 
@@ -313,8 +328,8 @@ body {
 }
 
 .app-shell-main {
-  margin-top: calc(3rem + 40px);
-  height: calc(100vh - 3rem - 40px);
+  margin-top: calc(3rem + var(--desktop-titlebar-height));
+  height: calc(100vh - 3rem - var(--desktop-titlebar-height));
   background-color: var(--cds-background);
   overflow-y: auto;
   transition: margin-left 110ms cubic-bezier(0.2, 0, 1, 0.9);

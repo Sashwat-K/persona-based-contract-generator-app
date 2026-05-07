@@ -17,6 +17,8 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { PERSONAS } from './store/mockData';
 import buildService from './services/buildService';
 import { useAuthStore } from './store/authStore';
+import { useConfigStore } from './store/configStore';
+import apiClient from './services/apiClient';
 import { getPrimaryRole, ROLE_LABELS } from './utils/roles';
 import { ProgressBar, Theme, Modal } from '@carbon/react';
 import '@carbon/charts/styles.css';
@@ -70,6 +72,9 @@ function App() {
   const [builds, setBuilds] = useState([]);
   const [selectedBuildId, setSelectedBuildId] = useState(null);
   const setupRequired = useAuthStore((state) => state.isSetupRequired());
+  const serverUrl = useConfigStore((state) => state.serverUrl);
+  const hydrateConfig = useConfigStore((state) => state.hydrateConfig);
+  const applyExternalConfig = useConfigStore((state) => state.applyExternalConfig);
 
   const resetAuthState = useCallback(() => {
     setIsAuthenticated(false);
@@ -96,17 +101,11 @@ function App() {
   }, []);
 
   useEffect(() => {
-    // Clear any stale session data on mount
-    const sessionId = sessionStorage.getItem('session_id');
-    if (!sessionId) {
-      // New session - clear localStorage
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('user_role');
-      localStorage.removeItem('user_email');
-      // Set new session ID
+    // Track the current renderer session without clearing persisted app configuration.
+    if (!sessionStorage.getItem('session_id')) {
       sessionStorage.setItem('session_id', Date.now().toString());
     }
-    
+
     // Initial Auth Check
     const token = localStorage.getItem('auth_token');
     const role = localStorage.getItem('user_role');
@@ -117,13 +116,27 @@ function App() {
       setIsAuthenticated(true);
       applyStoredAuthState({ role, rolesJson, email });
     }
-    
-    // Cleanup on unmount (app close)
-    return () => {
-      // Clear session storage
-      sessionStorage.clear();
-    };
   }, [applyStoredAuthState]);
+
+  useEffect(() => {
+    hydrateConfig().catch((error) => {
+      console.error('Failed to hydrate Electron app config:', error);
+    });
+
+    if (window.electron?.appConfig?.onChanged) {
+      return window.electron.appConfig.onChanged((config) => {
+        applyExternalConfig(config);
+      });
+    }
+
+    return undefined;
+  }, [applyExternalConfig, hydrateConfig]);
+
+  useEffect(() => {
+    if (serverUrl) {
+      apiClient.setBaseURL(serverUrl);
+    }
+  }, [serverUrl]);
 
   useEffect(() => {
     const onForcedLogout = () => {

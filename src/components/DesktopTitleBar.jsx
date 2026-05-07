@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal } from '@carbon/react';
 import HyperProtectIcon from './HyperProtectIcon';
 import apiClient from '../services/apiClient';
+import { useConfigStore } from '../store/configStore';
 
 const CONNECTION_POLL_INTERVAL_MS = 15000;
 const CONNECTION_TIMEOUT_MS = 5000;
@@ -49,7 +50,14 @@ const DesktopTitleBar = ({
     ? 'desktop-titlebar--z-top'
     : 'desktop-titlebar--z-base';
   const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform || '');
-  const [connectionStatus, setConnectionStatus] = useState(showConnectionStatus ? 'checking' : 'unknown');
+  const persistedConnectionStatus = useConfigStore((state) => state.connectionStatus);
+  const persistedServerUrl = useConfigStore((state) => state.serverUrl);
+  const setPersistedConnectionStatus = useConfigStore((state) => state.setConnectionStatus);
+  const [connectionStatus, setConnectionStatus] = useState(
+    showConnectionStatus
+      ? (persistedConnectionStatus === 'connected' ? 'online' : persistedConnectionStatus === 'failed' ? 'offline' : 'checking')
+      : 'unknown'
+  );
   const [connectionLatencyMs, setConnectionLatencyMs] = useState(null);
   const [connectionError, setConnectionError] = useState('');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
@@ -61,10 +69,9 @@ const DesktopTitleBar = ({
   const hasSeenOnline = useRef(false);
 
   const getServerUrl = useCallback(() => {
-    const storedUrl = typeof window !== 'undefined' ? localStorage.getItem('server_url') : '';
     const clientUrl = apiClient.getBaseURL?.() || '';
-    return normalizeServerUrl(storedUrl || clientUrl || 'http://localhost:8080');
-  }, []);
+    return normalizeServerUrl(persistedServerUrl || clientUrl || 'http://localhost:8080');
+  }, [persistedServerUrl]);
 
   const checkConnection = useCallback(async ({ forceModal = false } = {}) => {
     if (!showConnectionStatus) return true;
@@ -109,6 +116,7 @@ const DesktopTitleBar = ({
       clearTimeout(timeoutId);
       hasSeenOnline.current = true;
       setConnectionStatus('online');
+      setPersistedConnectionStatus('connected');
       setConnectionLatencyMs(latency);
       setConnectionError('');
       if (enableConnectionWatcher) {
@@ -121,6 +129,7 @@ const DesktopTitleBar = ({
         ? `Connection test timed out for ${serverUrl}.`
         : `Cannot reach ${serverUrl}. ${err.message || 'Server may be unavailable.'}`;
       setConnectionStatus('offline');
+      setPersistedConnectionStatus('failed');
       setConnectionLatencyMs(null);
       setConnectionError(message);
       if (enableConnectionWatcher && (forceModal || hasSeenOnline.current)) {
@@ -128,7 +137,7 @@ const DesktopTitleBar = ({
       }
       return false;
     }
-  }, [enableConnectionWatcher, getServerUrl, showConnectionStatus]);
+  }, [enableConnectionWatcher, getServerUrl, setPersistedConnectionStatus, showConnectionStatus]);
 
   useEffect(() => {
     if (!showConnectionStatus) return undefined;
@@ -150,14 +159,37 @@ const DesktopTitleBar = ({
       }
     };
 
+    const handleServerConfigChanged = (event) => {
+      const nextUrl = normalizeServerUrl(event?.detail?.serverUrl || '');
+      if (nextUrl) {
+        apiClient.setBaseURL(nextUrl);
+      }
+      checkConnection({ forceModal: false });
+    };
+
+    const handleServerConnectionChanged = (event) => {
+      const nextStatus = event?.detail?.connectionStatus;
+      if (nextStatus === 'connected') {
+        setConnectionStatus('online');
+        setConnectionError('');
+        checkConnection({ forceModal: false });
+      } else if (nextStatus === 'failed') {
+        setConnectionStatus('offline');
+      }
+    };
+
     window.addEventListener('focus', handleFocus);
     window.addEventListener('online', handleFocus);
+    window.addEventListener('server-config:changed', handleServerConfigChanged);
+    window.addEventListener('server-connection:changed', handleServerConnectionChanged);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.clearInterval(pollId);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('online', handleFocus);
+      window.removeEventListener('server-config:changed', handleServerConfigChanged);
+      window.removeEventListener('server-connection:changed', handleServerConnectionChanged);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [checkConnection, enableConnectionWatcher, showConnectionStatus]);

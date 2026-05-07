@@ -121,6 +121,19 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.invoke('app:getClientToolInfo')
   },
 
+  // App configuration
+  appConfig: {
+    read: () =>
+      ipcRenderer.invoke('appConfig:read'),
+    write: (updates) =>
+      ipcRenderer.invoke('appConfig:write', updates),
+    onChanged: (callback) => {
+      const listener = (_event, data) => callback(data);
+      ipcRenderer.on('appConfig:changed', listener);
+      return () => ipcRenderer.removeListener('appConfig:changed', listener);
+    }
+  },
+
   // Directory selection
   selectDirectory: () =>
     ipcRenderer.invoke('file:selectDirectory'),

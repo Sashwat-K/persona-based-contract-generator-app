@@ -47,7 +47,9 @@ const Login = ({ onLogin }) => {
   const [serverVersion, setServerVersion] = useState(null);
 
   const { setAuth } = useAuthStore();
+  const serverUrl = useConfigStore((state) => state.serverUrl);
   const setServerUrl = useConfigStore((state) => state.setServerUrl);
+  const setConnectionStatus = useConfigStore((state) => state.setConnectionStatus);
 
   // Load remembered email on mount
   useEffect(() => {
@@ -59,13 +61,11 @@ const Login = ({ onLogin }) => {
   }, []);
 
   useEffect(() => {
-    // Get server URL from localStorage or use default
-    const savedUrl = localStorage.getItem('server_url') || 'http://localhost:8080';
+    const savedUrl = serverUrl || 'http://localhost:8080';
     setTempServerUrl(savedUrl);
-
-    // Check server status on mount
+    apiClient.setBaseURL(savedUrl);
     checkServerStatus(savedUrl);
-  }, []);
+  }, [serverUrl]);
 
   const formatLogTimestamp = () => new Date().toLocaleTimeString('en-US', {
     hour: '2-digit',
@@ -232,14 +232,17 @@ const Login = ({ onLogin }) => {
       if (result.ok) {
         setServerStatus('online');
         setServerVersion(result.version || null);
+        setConnectionStatus('connected');
       } else {
         setServerStatus('offline');
         setServerVersion(null);
+        setConnectionStatus('failed');
       }
     } catch (err) {
       console.error('Server health check failed:', err);
       setServerStatus('offline');
       setServerVersion(null);
+      setConnectionStatus('failed');
     } finally {
       setIsCheckingServer(false);
     }
@@ -342,7 +345,7 @@ const Login = ({ onLogin }) => {
   };
 
   const openServerConfigModal = () => {
-    const savedUrl = localStorage.getItem('server_url') || 'http://localhost:8080';
+    const savedUrl = serverUrl || 'http://localhost:8080';
     setTempServerUrl(savedUrl);
     setLastTestedUrl('');
     setLastTestPassed(false);
@@ -353,7 +356,7 @@ const Login = ({ onLogin }) => {
 
   const closeServerConfigModal = () => {
     setShowServerConfig(false);
-    setTempServerUrl(localStorage.getItem('server_url') || 'http://localhost:8080');
+    setTempServerUrl(serverUrl || 'http://localhost:8080');
     setLastTestedUrl('');
     setLastTestPassed(false);
     setConnectionLogs([]);
@@ -382,11 +385,13 @@ const Login = ({ onLogin }) => {
       setLastTestPassed(true);
       setServerStatus('online');
       setServerVersion(result.version || null);
+      setConnectionStatus('connected');
       appendConnectionLog('Test finished successfully.');
     } else {
       setLastTestPassed(false);
       setServerStatus('offline');
       setServerVersion(null);
+      setConnectionStatus('failed');
       setError(result.message);
       appendConnectionLog('Test finished with errors.');
     }
@@ -409,8 +414,8 @@ const Login = ({ onLogin }) => {
       return;
     }
 
-    localStorage.setItem('server_url', validation.url);
     setServerUrl(validation.url);
+    setConnectionStatus('connected');
     apiClient.setBaseURL(validation.url);
     setServerStatus('online');
     appendConnectionLog(`Saved server URL: ${validation.url}`);

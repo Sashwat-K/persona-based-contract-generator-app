@@ -17,8 +17,6 @@ import {
 import buildService from '../services/buildService';
 import { formatDate } from '../utils/formatters';
 
-const CONTEXT_KEY_PREFIX = 'auditor_v2_';
-
 const FinaliseContract = ({ buildId, buildStatus: buildStatusProp, onStatusUpdate }) => {
   const [liveStatus, setLiveStatus] = useState(buildStatusProp || '');
   const [isFinalized, setIsFinalized] = useState(false);
@@ -37,19 +35,6 @@ const FinaliseContract = ({ buildId, buildStatus: buildStatusProp, onStatusUpdat
   const [loadingContract, setLoadingContract] = useState(false);
 
   const contractEditorLineRef = React.useRef(null);
-
-  const contextKey = `${CONTEXT_KEY_PREFIX}${buildId}`;
-
-  const loadContextFromSession = () => {
-    try {
-      const raw = sessionStorage.getItem(contextKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      setSigningKeyPassphrase(parsed?.signing_key_passphrase || '');
-    } catch (_) {
-      // no-op
-    }
-  };
 
   const refreshBuildStatus = async () => {
     const build = await buildService.getBuild(buildId);
@@ -72,7 +57,6 @@ const FinaliseContract = ({ buildId, buildStatus: buildStatusProp, onStatusUpdat
   useEffect(() => {
     const load = async () => {
       try {
-        loadContextFromSession();
         await refreshBuildStatus();
       } catch (_) {
         // no-op
@@ -101,12 +85,6 @@ const FinaliseContract = ({ buildId, buildStatus: buildStatusProp, onStatusUpdat
 
       setResult(response || null);
       setSuccess('Build finalized successfully. The contract has been signed.');
-
-      try {
-        sessionStorage.removeItem(contextKey);
-      } catch (_) {
-        // no-op
-      }
 
       await refreshBuildStatus();
     } catch (err) {
@@ -224,7 +202,7 @@ const FinaliseContract = ({ buildId, buildStatus: buildStatusProp, onStatusUpdat
       <div className={`workflow-body${isAvailable && !isFinalized ? '' : ' workflow-body--disabled'}`}>
         <p className="workflow-step-copy">
           The backend will automatically use the latest signing and attestation keys registered for this build.
-          You only need to provide the signing key passphrase to decrypt the private key for contract signing.
+          Enter the signing key passphrase manually to decrypt the private key for contract signing.
         </p>
 
         <TextInput
@@ -236,17 +214,10 @@ const FinaliseContract = ({ buildId, buildStatus: buildStatusProp, onStatusUpdat
           placeholder="Enter the passphrase used during signing key registration"
           disabled={finalizing || isFinalized}
           autoComplete="off"
-          helperText="This passphrase will be used to decrypt the signing private key for contract signing"
+          helperText="This passphrase is not prefilled or cached. Enter it manually to decrypt the signing private key for contract signing."
         />
 
         <div className="workflow-inline-actions">
-          <Button
-            kind="secondary"
-            onClick={loadContextFromSession}
-            disabled={finalizing || isFinalized}
-          >
-            Load Passphrase from Session
-          </Button>
           <Button
             renderIcon={Upload}
             onClick={handleFinalize}

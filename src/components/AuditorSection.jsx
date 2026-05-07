@@ -17,9 +17,9 @@ import {
 } from '@carbon/icons-react';
 import buildService from '../services/buildService';
 import ConfirmDialog from './ConfirmDialog';
+import PasswordStrengthMeter from './PasswordStrengthMeter';
 import { PLATFORMS, getCertsByPlatform, getCertById } from '../data/builtinCerts';
 
-const CONTEXT_KEY_PREFIX = 'auditor_v2_';
 const TERMINAL_STATUSES = new Set(['FINALIZED', 'CONTRACT_DOWNLOADED', 'CANCELLED']);
 const SIGNING_REGISTERED_STATUSES = new Set([
   'SIGNING_KEY_REGISTERED',
@@ -65,7 +65,6 @@ const AuditorSection = ({ buildId, buildStatus: buildStatusProp, onStatusUpdate,
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  const contextKey = `${CONTEXT_KEY_PREFIX}${buildId}`;
   const isSigningMode = mode === 'signing';
   const isAttestationMode = mode === 'attestation';
   const showSigningCard = !isAttestationMode;
@@ -114,26 +113,6 @@ const AuditorSection = ({ buildId, buildStatus: buildStatusProp, onStatusUpdate,
     setSelectedCertId(certs.length > 0 ? certs[0].id : '');
   }, [selectedPlatformId]);
 
-  const readStoredContext = () => {
-    try {
-      const raw = sessionStorage.getItem(contextKey);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (_) {
-      return {};
-    }
-  };
-
-  const persistContext = (updates) => {
-    try {
-      const next = { ...readStoredContext(), ...updates, saved_at: new Date().toISOString() };
-      sessionStorage.setItem(contextKey, JSON.stringify(next));
-    } catch (_) {
-      // no-op
-    }
-  };
-
   const refreshBuildStatus = async () => {
     const build = await buildService.getBuild(buildId);
     const status = build?.status || '';
@@ -154,18 +133,10 @@ const AuditorSection = ({ buildId, buildStatus: buildStatusProp, onStatusUpdate,
       } finally {
         setLoadingStatus(false);
       }
-
-      const parsed = readStoredContext();
-      if (parsed?.signing_key_id) {
-        setSigningResult({ signing_key_id: parsed.signing_key_id, source: 'session' });
-      }
-      if (parsed?.attestation_key_id) {
-        setAttestationResult({ attestation_key_id: parsed.attestation_key_id, source: 'session' });
-      }
     };
 
     load();
-  }, [buildId, contextKey]);
+  }, [buildId]);
 
   const handleRegisterSigningKey = () => {
     setError(null);
@@ -207,15 +178,9 @@ const AuditorSection = ({ buildId, buildStatus: buildStatusProp, onStatusUpdate,
       });
       setSigningResult(result);
       const nextSigningKeyID = result?.signing_key_id || result?.key_id || '';
-      if (nextSigningKeyID) {
-        persistContext({
-          signing_key_id: nextSigningKeyID,
-          signing_key_passphrase: signingPassphrase.trim()
-        });
-      }
       await refreshBuildStatus();
       if (result?.passphrase_ignored) {
-        setSuccess('Signing key registered successfully. Passphrase is saved in this session.');
+        setSuccess('Signing key registered successfully. The backend ignored the optional passphrase field.');
       } else {
         setSuccess(isSigningMode
           ? 'Signing key registered successfully.'
@@ -300,12 +265,6 @@ const AuditorSection = ({ buildId, buildStatus: buildStatusProp, onStatusUpdate,
       });
       setAttestationResult(result);
       const nextAttestationKeyID = result?.attestation_key_id || result?.key_id || '';
-      if (nextAttestationKeyID) {
-        persistContext({
-          attestation_key_id: nextAttestationKeyID,
-          attestation_key_passphrase: attestationPassphrase.trim()
-        });
-      }
       await refreshBuildStatus();
       setSuccess('Attestation key registered successfully. The public key has been encrypted.');
     } catch (err) {
@@ -376,6 +335,7 @@ const AuditorSection = ({ buildId, buildStatus: buildStatusProp, onStatusUpdate,
               autoComplete="new-password"
               disabled={registeringSigning || isTerminal || isSigningRegistered}
             />
+            <PasswordStrengthMeter password={signingPassphrase} />
             {signingKeyID && (
               <p className="workflow-step-copy">
                 Signing Key ID: <code>{signingKeyID}</code>
@@ -423,6 +383,8 @@ const AuditorSection = ({ buildId, buildStatus: buildStatusProp, onStatusUpdate,
               autoComplete="new-password"
               disabled={registeringAttestation || !canRegisterAttestation || isTerminal || isAttestationRegistered}
             />
+            
+            <PasswordStrengthMeter password={attestationPassphrase} />
             
             <div style={{ marginTop: '1rem' }}>
               <h5 className="workflow-step-title" style={{ fontSize: '0.875rem', marginBottom: '0.5rem' }}>
@@ -530,7 +492,7 @@ const AuditorSection = ({ buildId, buildStatus: buildStatusProp, onStatusUpdate,
             Register a signing key for this build now?
           </p>
           <p className="confirm-dialog__note">
-            The passphrase you entered will be retained for this build session.
+            Keep this passphrase available. You will need to enter it again when finalising the contract.
           </p>
         </div>
       </ConfirmDialog>
@@ -550,7 +512,7 @@ const AuditorSection = ({ buildId, buildStatus: buildStatusProp, onStatusUpdate,
             Register an attestation key for this build now?
           </p>
           <p className="confirm-dialog__note">
-            The passphrase you entered will be retained for this build session.
+            Keep this passphrase available for later protected operations. It will not be retained in session storage.
           </p>
         </div>
       </ConfirmDialog>

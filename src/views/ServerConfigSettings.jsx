@@ -14,6 +14,8 @@ import apiClient from '../services/apiClient';
 import { validateUrl } from '../utils/validators';
 import { formatDate } from '../utils/formatters';
 
+const normalizeServerUrl = (value = '') => String(value).trim().replace(/\/+$/, '');
+
 function ServerConfigSettings() {
   const {
     serverUrl,
@@ -39,8 +41,10 @@ function ServerConfigSettings() {
     setError(null);
     setTestResult(null);
 
+    const normalizedUrl = normalizeServerUrl(inputUrl);
+
     // Validate URL format
-    const validation = validateUrl(inputUrl, true);
+    const validation = validateUrl(normalizedUrl, true);
     if (!validation.valid) {
       setError(validation.error);
       setTesting(false);
@@ -50,11 +54,12 @@ function ServerConfigSettings() {
     try {
       // Temporarily update API client base URL for testing
       const originalUrl = apiClient.getBaseURL();
-      apiClient.setBaseURL(inputUrl);
+      apiClient.setBaseURL(normalizedUrl);
 
       // Test connection with roles endpoint (doesn't require auth)
       await apiClient.get('/roles');
 
+      setInputUrl(normalizedUrl);
       setTestResult('success');
       setConnectionStatus('connected', new Date().toISOString());
 
@@ -70,9 +75,13 @@ function ServerConfigSettings() {
   };
 
   const handleSave = () => {
+    const normalizedUrl = normalizeServerUrl(inputUrl);
+
     if (testResult === 'success') {
-      setServerUrl(inputUrl);
-      apiClient.setBaseURL(inputUrl);
+      setServerUrl(normalizedUrl);
+      setConnectionStatus('connected', new Date().toISOString());
+      apiClient.setBaseURL(normalizedUrl);
+      setInputUrl(normalizedUrl);
       setError(null);
     } else {
       setError('Please test the connection before saving');
@@ -80,7 +89,7 @@ function ServerConfigSettings() {
   };
 
   const handleReset = () => {
-    const defaultUrl = 'https://localhost:8443';
+    const defaultUrl = 'http://localhost:8080';
     setInputUrl(defaultUrl);
     setTestResult(null);
     setError(null);

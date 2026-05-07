@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs/promises');
 const { URL, fileURLToPath } = require('node:url');
 const { spawn } = require('child_process');
 const keyManager = require('./crypto/keyManager');
@@ -16,6 +17,9 @@ const ALLOWED_EXTERNAL_PROTOCOLS = new Set(['https:', 'http:', 'mailto:']);
 const APP_DIST_DIR = path.resolve(__dirname, '../dist');
 const APP_INDEX_FILE = path.join(APP_DIST_DIR, 'index.html');
 let mainWindow = null;
+const DEFAULT_SERVER_URL = 'http://localhost:8080';
+const CONFIG_DIR_NAME = 'ibm-cc-contract-builder';
+const CONFIG_FILE_NAME = 'config.json';
 
 const getDevOrigin = () => {
   try {
@@ -115,6 +119,54 @@ const firstNonEmptyLine = (value = '') => (
     .map((line) => line.trim())
     .find(Boolean) || ''
 );
+
+const getConfigDirectoryPath = () => {
+  if (process.platform === 'win32') {
+    return path.join(app.getPath('appData'), CONFIG_DIR_NAME);
+  }
+  if (process.platform === 'darwin') {
+    return path.join(app.getPath('home'), 'Library', 'Application Support', CONFIG_DIR_NAME);
+  }
+  return path.join(app.getPath('home'), '.config', CONFIG_DIR_NAME);
+};
+
+const getConfigFilePath = () => path.join(getConfigDirectoryPath(), CONFIG_FILE_NAME);
+
+const ensureConfigDirectory = async () => {
+  await fs.mkdir(getConfigDirectoryPath(), { recursive: true });
+};
+
+const getDefaultAppConfig = () => ({
+  serverUrl: DEFAULT_SERVER_URL
+});
+
+const readAppConfig = async () => {
+  try {
+    const raw = await fs.readFile(getConfigFilePath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      ...getDefaultAppConfig(),
+      ...(parsed && typeof parsed === 'object' ? parsed : {})
+    };
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      return getDefaultAppConfig();
+    }
+    throw error;
+  }
+};
+
+const writeAppConfig = async (updates = {}) => {
+  const current = await readAppConfig();
+  const next = {
+    ...current,
+    ...(updates && typeof updates === 'object' ? updates : {})
+  };
+
+  await ensureConfigDirectory();
+  await fs.writeFile(getConfigFilePath(), JSON.stringify(next, null, 2), 'utf8');
+  return next;
+};
 
 const runToolCommand = (command, args = []) => new Promise((resolve) => {
   let stdout = '';
@@ -297,16 +349,6 @@ const createWindow = () => {
     console.error('[main] Renderer process exited unexpectedly:', details);
   });
 
-  // Clear session data when window is closed
-  win.on('close', () => {
-    // Clear all session data
-    win.webContents.session.clearStorageData({
-      storages: ['localstorage', 'sessionstorage', 'cookies']
-    }).catch(err => {
-      console.error('Failed to clear storage:', err);
-    });
-  });
-
   mainWindow = win;
   win.on('closed', () => {
     if (mainWindow === win) {
@@ -316,6 +358,25 @@ const createWindow = () => {
 
   return win;
 };
+
+registerIpcHandler('appConfig:read', async () => {
+  const config = await readAppConfig();
+  return {
+    ...config,
+    configFilePath: getConfigFilePath()
+  };
+});
+
+registerIpcHandler('appConfig:write', async (_event, updates) => {
+  const nextConfig = await writeAppConfig(updates);
+  if (mainWindow?.webContents) {
+    mainWindow.webContents.send('appConfig:changed', nextConfig);
+  }
+  return {
+    ...nextConfig,
+    configFilePath: getConfigFilePath()
+  };
+});
 
 // ============================================================================
 // IPC Handlers - Crypto Operations
